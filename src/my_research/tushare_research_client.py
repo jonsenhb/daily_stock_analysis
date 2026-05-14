@@ -4,6 +4,7 @@ Tushare 研究用封装：仅服务 src/my_research，不读 .env。
 
 - 依赖与 data_provider/tushare_fetcher._TushareHttpClient 相同的 ``query(api_name, fields=..., **params)`` 契约。
 - get_limit_list 对应官方接口 limit_list_d（涨跌停列表-新）。
+- get_limit_step 对应官方接口 limit_step（连板天梯）。
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ DEFAULT_FIELDS: Dict[str, str] = {
     "index_dailybasic": "ts_code,trade_date,total_mv,float_mv,turnover_rate,turnover_rate_f,pe,pe_ttm,pb",
     "stk_limit": "trade_date,ts_code,pre_close,up_limit,down_limit",
     "limit_list_d": "trade_date,ts_code,industry,name,close,pct_chg,amount,turnover_ratio,fd_amount,first_time,last_time,open_times,up_stat,limit_times,limit",
+    "limit_step": "ts_code,name,trade_date,nums",
     "limit_list_ths": "ts_code,trade_date,name,pct_chg,open_num,lu_desc,limit_type,tag,status,first_lu_time,last_lu_time,turnover_rate,turnover,market_type",
     "limit_cpt_list": "ts_code,name,trade_date,days,up_stat,cons_nums,up_nums,pct_chg,rank",
     "top_list": "trade_date,ts_code,name,close,pct_change,turnover_rate,amount,l_buy,l_sell,l_amount,net_amount,net_rate,amount_rate,float_values,reason",
@@ -288,6 +290,32 @@ class TushareResearchClient:
                 "exchange": exchange,
                 "start_date": start_date,
                 "end_date": end_date,
+            },
+            fields=fields,
+        )
+
+    def get_limit_step(
+        self,
+        *,
+        trade_date: Optional[str] = None,
+        ts_code: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        nums: Optional[str] = None,
+        fields: Optional[str] = None,
+    ) -> pd.DataFrame:
+        """
+        连板天梯。对应 Tushare Pro API：limit_step。
+        文档：https://tushare.pro/document/2?doc_id=356
+        """
+        return self._call(
+            "limit_step",
+            {
+                "trade_date": trade_date,
+                "ts_code": ts_code,
+                "start_date": start_date,
+                "end_date": end_date,
+                "nums": nums,
             },
             fields=fields,
         )

@@ -41,6 +41,7 @@
 | `top_inst` | [doc_id=107](https://tushare.pro/document/2?doc_id=107) | **龙虎榜机构/营业部成交明细** | **至少 5000 积分** | **官方接口页未载明** | **单次最大 10000 行** | 可按参数循环取全历史 |
 | `stk_limit` | [doc_id=183](https://tushare.pro/document/2?doc_id=183) | **每日涨跌停价格** | **官方接口页未载明** | **官方接口页未载明** | **官方接口页未载明** | 支持单日全市场或单票区间 |
 | `limit_list_d` | [doc_id=298](https://tushare.pro/document/2?doc_id=298) | **涨跌停列表（新）**；类型 U/D/Z 等 | **官方接口页未载明** | **官方接口页未载明** | **官方接口页未载明** | 按交易所等参数筛选 |
+| `limit_step` | [doc_id=356](https://tushare.pro/document/2?doc_id=356) | **连板天梯**（当日连板高度分布） | **官方接口页未载明** | **官方接口页未载明** | **官方接口页未载明** | `trade_date` 等与官网一致 |
 | `limit_list_ths` | [doc_id=355](https://tushare.pro/document/2?doc_id=355) | **涨跌停榜单（同花顺）**；多类池（涨停池等） | **官方接口页未载明** | **官方接口页未载明** | **官方接口页未载明** | `limit_type` 等见接口页 |
 | `limit_cpt_list` | [doc_id=357](https://tushare.pro/document/2?doc_id=357) | **涨停家数最多的概念板块**（强势板块轮动） | **8000 积分以上每分钟 500 次，每天总量不限制** | **官方接口页未载明** | **单次最大 2000 行** | 可按日期/板块代码循环 |
 | `moneyflow_ind_ths` | [doc_id=343](https://tushare.pro/document/2?doc_id=343) | **同花顺行业** 资金流向 | **6000 积分可调取** | **每日盘后更新** | **单次最大 5000 条** | 可按日期/代码循环 |
@@ -68,6 +69,7 @@
 | `top_inst` | `trade_date,ts_code,exalter,side,buy,sell,buy_rate,sell_rate,net_buy,reason` | 营业部画像、净买卖 |
 | `stk_limit` | `trade_date,ts_code,pre_close,up_limit,down_limit` | 涨跌停边界 |
 | `limit_list_d` | `trade_date,ts_code,industry,name,close,pct_chg,amount,turnover_ratio,fd_amount,first_time,last_time,open_times,up_stat,limit_times,limit` | 涨跌停/炸板统计 |
+| `limit_step` | `ts_code,name,trade_date,nums` | 连板天梯高度 |
 | `limit_list_ths` | `ts_code,trade_date,name,pct_chg,open_num,lu_desc,limit_type,tag,status,first_lu_time,last_lu_time,turnover_rate,turnover,market_type`（及业务需要的可选时间/封单列） | 同花顺口径涨停池；官网表有个别括号未闭合，以实现时返回为准 |
 | `limit_cpt_list` | `ts_code,name,trade_date,days,up_stat,cons_nums,up_nums,pct_chg,rank` | 最强概念板块 |
 | `moneyflow_ind_ths` | `trade_date,ts_code,industry,close,pct_change,company_num,net_amount,net_buy_amount,net_sell_amount` | 行业资金流 |
@@ -84,7 +86,7 @@
 3. **`daily` / `index_daily`**：按 **`trade_date` 分区** 或按 `ts_code` + 日期范围；新交易日盘后（官方约 15:00–16:00 入库）增量写入；遵守 **6000/8000 行** 分页与 **500 次/分** 等限制，必要时 sleep + 重试队列。
 4. **`daily_basic` / THS 资金流**：与日频行情同一 **trade_date** 分区；资金流接口写明 **盘后更新**，不宜当作盘中实时信号。
 5. **龙虎榜 `top_list` / `top_inst`**：按 **trade_date** 全量落盘；`top_inst` 行数可达万级，注意分页循环。
-6. **涨跌停类**：`stk_limit`、`limit_list_d`、`limit_list_ths`、`limit_cpt_list` 均适合 **按日快照**；**多数据源并存**时保留 `source` 与拉取时间戳，避免不同来源或口径混用。
+6. **涨跌停类**：`stk_limit`、`limit_list_d`、`limit_step`、`limit_list_ths`、`limit_cpt_list` 均适合 **按日快照**；**多数据源并存**时保留 `source` 与拉取时间戳，避免不同来源或口径混用。
 7. **元数据**：每条缓存记录附带 `fetched_at`、请求参数 hash，便于幂等与排障。
 
 ---

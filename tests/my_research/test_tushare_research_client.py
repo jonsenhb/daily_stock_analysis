@@ -115,6 +115,7 @@ def test_get_index_daily_requires_ts_code_in_call(mock_pro):
         ("get_daily_basic", "daily_basic", {"trade_date": "20240510"}),
         ("get_index_dailybasic", "index_dailybasic", {"trade_date": "20240510"}),
         ("get_stk_limit", "stk_limit", {"trade_date": "20240601"}),
+        ("get_limit_step", "limit_step", {"trade_date": "20241125"}),
         ("get_limit_list_ths", "limit_list_ths", {"trade_date": "20241125"}),
         ("get_limit_cpt_list", "limit_cpt_list", {"trade_date": "20241127"}),
         ("get_top_inst", "top_inst", {"trade_date": "20240510"}),

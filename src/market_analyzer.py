@@ -92,6 +92,13 @@ class MarketOverview:
     top_sectors: List[Dict] = field(default_factory=list)     # 涨幅前5板块
     bottom_sectors: List[Dict] = field(default_factory=list)  # 跌幅前5板块
 
+    # Tushare 涨跌停快照（limit_list_d Z / limit_step），需配置 TUSHARE_TOKEN；未拉取则保持默认
+    tushare_limit_trade_date: Optional[str] = None  # YYYYMMDD
+    blown_limit_count: Optional[int] = None
+    limit_ladder_max_streak: Optional[int] = None
+    limit_ladder_ge3_count: Optional[int] = None
+    limit_step_top: List[Dict[str, Any]] = field(default_factory=list)
+
 
 class MarketAnalyzer:
     """
@@ -297,11 +304,28 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         # 3. 获取板块涨跌榜（A 股有，美股暂无）
         if self.profile.has_sector_rankings:
             self._get_sector_rankings(overview)
+
+        # 4. Tushare 炸板/连板天梯（A 股、需 token）
+        if self.region == "cn" and self.profile.has_market_stats:
+            self._enrich_cn_limit_sentiment(overview)
         
-        # 4. 获取北向资金（可选）
+        # 5. 获取北向资金（可选）
         # self._get_north_flow(overview)
         
         return overview
+
+    def _enrich_cn_limit_sentiment(self, overview: MarketOverview) -> None:
+        """写入 Tushare limit_list_d(Z) / limit_step 快照；失败仅打日志。"""
+        token = (getattr(self.config, "tushare_token", None) or "").strip()
+        if not token:
+            logger.debug("[大盘] 未配置 TUSHARE_TOKEN，跳过炸板/连板天梯快照")
+            return
+        try:
+            from src.my_research.cn_limit_sentiment import enrich_overview_cn_limit_sentiment
+
+            enrich_overview_cn_limit_sentiment(overview, token=token)
+        except Exception as e:
+            logger.warning("[大盘] 炸板/连板天梯 enrichment 失败: %s", e)
 
     
     def _get_main_indices(self) -> List[MarketIndex]:
@@ -539,6 +563,50 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         # Insert the block before the next heading, with spacing
         return text[:insert_pos].rstrip() + '\n\n' + block + '\n\n' + text[insert_pos:].lstrip('\n')
 
+    def build_market_light_snapshot(self, overview: MarketOverview) -> Dict[str, Any]:
+        """Build a deterministic market-light snapshot from structured breadth data."""
+        score, temperature_label = self._build_market_temperature(overview)
+        if score >= 60:
+            status = "green"
+        elif score >= 40:
+            status = "yellow"
+        else:
+            status = "red"
+
+        if self._get_review_language() == "en":
+            label_map = {
+                "green": "constructive",
+                "yellow": "watch",
+                "red": "defensive",
+            }
+            guidance_map = {
+                "green": "Risk appetite is acceptable; focus on leading themes and position discipline.",
+                "yellow": "Signals are mixed; keep position sizing moderate and wait for confirmation.",
+                "red": "Risk is elevated; prioritize drawdown control and avoid chasing weak rebounds.",
+            }
+            reasons = self._build_market_light_reasons_en(overview, score)
+        else:
+            label_map = {
+                "green": "可进攻",
+                "yellow": "需观察",
+                "red": "偏防守",
+            }
+            guidance_map = {
+                "green": "风险偏好尚可，关注主线延续与仓位纪律。",
+                "yellow": "信号分化，控制仓位并等待量价确认。",
+                "red": "风险偏高，优先控制回撤，避免追高弱反弹。",
+            }
+            reasons = self._build_market_light_reasons_zh(overview, score)
+
+        return {
+            "status": status,
+            "label": label_map[status],
+            "score": score,
+            "temperature_label": temperature_label,
+            "reasons": reasons,
+            "guidance": guidance_map[status],
+        }
+
     def _build_stats_block(self, overview: MarketOverview) -> str:
         """Build market statistics block."""
         has_stats = overview.up_count or overview.down_count or overview.total_amount
@@ -546,8 +614,7 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             return ""
         if self._get_review_language() == "en":
             light = self.build_market_light_snapshot(overview)
-            return "\n".join(
-                [
+            out_lines = [
                     f"> **Market Light**: {light['status']} ({light['label']}) | "
                     f"**{light['score']}/100** {self._build_temperature_bar(light['score'])}",
                     f"> **Reasons**: {'; '.join(light['reasons'])}",
@@ -557,8 +624,9 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
                     f"Flat **{overview.flat_count}** | "
                     f"Limit-up **{overview.limit_up_count}** / Limit-down **{overview.limit_down_count}** | "
                     f"Turnover **{overview.total_amount:.0f}** ({self._get_turnover_unit_label()})",
-                ]
-            )
+            ]
+            out_lines.extend(self._tushare_limit_sentiment_lines(overview))
+            return "\n".join(out_lines)
         light = self.build_market_light_snapshot(overview)
         score, label = light["score"], light["temperature_label"]
         participation = overview.up_count + overview.down_count
@@ -577,9 +645,117 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
             f"| 涨停/跌停 | {overview.limit_up_count} / {overview.limit_down_count} | 涨跌停差 {limit_spread:+d} |",
             f"| 两市成交额 | {overview.total_amount:.0f} 亿 | {self._describe_turnover(overview.total_amount)} |",
         ]
+        lines.extend(self._tushare_limit_sentiment_lines(overview))
         return "\n".join(lines)
 
-    def build_market_light_snapshot(self, overview: MarketOverview) -> Dict[str, Any]:
+    def _tushare_limit_sentiment_lines(self, overview: MarketOverview) -> List[str]:
+        """Tushare limit_list_d(Z) + limit_step 快照说明行（无数据则空列表）。"""
+        if overview.tushare_limit_trade_date is None:
+            return []
+        td = overview.tushare_limit_trade_date
+        blown = overview.blown_limit_count
+        mx = overview.limit_ladder_max_streak
+        ge3 = overview.limit_ladder_ge3_count
+        top = overview.limit_step_top or []
+        review_language = self._get_review_language()
+        if review_language == "en":
+            lines = [
+                f"> **Tushare limit snapshot** (`trade_date={td}`; APIs: limit_list_d Z / limit_step):",
+                f"> - Blown boards (type Z): **{blown if blown is not None else 'N/A'}**",
+            ]
+            if mx is not None:
+                lines.append(
+                    f"> - Ladder max streak: **{mx}** | tickers with ≥3 boards: **{ge3 if ge3 is not None else 'N/A'}**"
+                )
+            elif ge3 is not None:
+                lines.append(f"> - Tickers with ≥3 boards: **{ge3}**")
+            if top:
+                tops = ", ".join(
+                    f"{r.get('name') or r.get('ts_code') or '-'} ({r.get('nums', 0)}-board)"
+                    for r in top[:5]
+                )
+                lines.append(f"> - Top by streak height: {tops}")
+            lines.append("> - Post-close oriented vendor snapshot; for reference only, not investment advice.")
+            return lines
+        tops_zh = ""
+        if top:
+            tops_zh = "；".join(
+                f"{r.get('name') or r.get('ts_code') or '-'}（{r.get('nums', 0)}板）"
+                for r in top[:5]
+            )
+        line2 = (
+            f"> - 炸板家数（limit_list_d，`limit_type=Z`）：**{blown if blown is not None else 'N/A'}**"
+        )
+        lines = [
+            f"> **Tushare 涨跌停快照**（`trade_date={td}`；炸板参考 [doc/298](https://tushare.pro/document/2?doc_id=298)，"
+            f"连板天梯 [doc/356](https://tushare.pro/document/2?doc_id=356)）：",
+            line2,
+        ]
+        if mx is not None:
+            lines.append(
+                f"> - 连板天梯：最高 **{mx}** 板；≥3 板 **{ge3 if ge3 is not None else 'N/A'}** 家"
+                + (f"；前列：{tops_zh}" if tops_zh else "")
+            )
+        elif ge3 is not None:
+            lines.append(f"> - 连板天梯：≥3 板 **{ge3}** 家" + (f"；前列：{tops_zh}" if tops_zh else ""))
+        elif tops_zh:
+            lines.append(f"> - 连板天梯前列：{tops_zh}")
+        lines.append("> - 数据为第三方盘后口径快照，仅供参考，不构成投资建议。")
+        return lines
+
+    def _funds_sentiment_section_zh(self, overview: MarketOverview) -> str:
+        lines = [
+            "- 结合成交额和涨跌家数看，当前更适合等待确认，避免仅凭单一热点追高。",
+        ]
+        if overview.tushare_limit_trade_date is not None:
+            blown = overview.blown_limit_count
+            mx = overview.limit_ladder_max_streak
+            ge3 = overview.limit_ladder_ge3_count
+            top = overview.limit_step_top or []
+            td = overview.tushare_limit_trade_date
+            detail = (
+                f"- **Tushare 情绪快照**（`trade_date={td}`）：炸板 **{blown if blown is not None else 'N/A'}** 家"
+            )
+            if mx is not None:
+                detail += f"；连板高度最高 **{mx}** 板"
+            if ge3 is not None:
+                detail += f"；≥3 连板 **{ge3}** 家"
+            if top:
+                tops = "，".join(
+                    f"{r.get('name') or r.get('ts_code') or '-'}（{r.get('nums', 0)}板）"
+                    for r in top[:5]
+                )
+                detail += f"；高度领先：**{tops}**"
+            detail += "。（口径见 Tushare `limit_list_d`/`limit_step`，盘后更新为主。）"
+            lines.append(detail)
+        return "\n".join(lines)
+
+    def _funds_sentiment_section_en(self, overview: MarketOverview) -> str:
+        lines = [
+            "- Tie turnover to breadth before over-reading a single theme; avoid chasing without confirmation.",
+        ]
+        if overview.tushare_limit_trade_date is not None:
+            blown = overview.blown_limit_count
+            mx = overview.limit_ladder_max_streak
+            ge3 = overview.limit_ladder_ge3_count
+            top = overview.limit_step_top or []
+            td = overview.tushare_limit_trade_date
+            frag = (
+                f"- **Tushare sentiment snapshot** (`trade_date={td}`): blown boards (Z) **{blown if blown is not None else 'N/A'}**"
+            )
+            if mx is not None:
+                frag += f"; ladder max **{mx}** boards"
+            if ge3 is not None:
+                frag += f"; **{ge3}** tickers with ≥3 boards"
+            if top:
+                tops = ", ".join(
+                    f"{r.get('name') or r.get('ts_code') or '-'} ({r.get('nums', 0)}b)"
+                    for r in top[:5]
+                )
+                frag += f"; leaders: {tops}"
+            frag += ". (Vendor post-close snapshot; not investment advice.)"
+            lines.append(frag)
+        return "\n".join(lines)
         """Build a deterministic market-light snapshot from structured breadth data."""
         score, temperature_label = self._build_market_temperature(overview)
         if score >= 60:
@@ -889,10 +1065,27 @@ Focus on index trend, liquidity, and sector rotation to shape the next-session t
         sector_block = ""
         if review_language == "en":
             if self.profile.has_market_stats:
-                stats_block = f"""## Market Breadth
+                base = f"""## Market Breadth
 - Advancers: {overview.up_count} | Decliners: {overview.down_count} | Flat: {overview.flat_count}
 - Limit-up: {overview.limit_up_count} | Limit-down: {overview.limit_down_count}
 - Turnover: {overview.total_amount:.0f} ({self._get_turnover_unit_label()})"""
+                if overview.tushare_limit_trade_date:
+                    b = overview.blown_limit_count
+                    mx = overview.limit_ladder_max_streak
+                    ge3 = overview.limit_ladder_ge3_count
+                    td = overview.tushare_limit_trade_date
+                    top = overview.limit_step_top or []
+                    tops = ", ".join(
+                        f"{r.get('name') or r.get('ts_code')}({r.get('nums')}b)"
+                        for r in top[:5]
+                    )
+                    base += (
+                        f"\n- Tushare limit snapshot (`trade_date={td}`): blown(Z) {b if b is not None else 'N/A'}; "
+                        f"ladder max {mx if mx is not None else 'N/A'}; ≥3-board {ge3 if ge3 is not None else 'N/A'}"
+                        + (f"; top: {tops}" if tops else "")
+                        + " (post-close vendor data; corroborate before trading decisions)."
+                    )
+                stats_block = base
             else:
                 stats_block = "## Market Breadth\n(No equivalent advance/decline statistics are available for this market.)"
 
@@ -904,10 +1097,27 @@ Lagging: {bottom_sectors_text if bottom_sectors_text else "N/A"}"""
                 sector_block = "## Sector Performance\n(Sector data not available for this market.)"
         else:
             if self.profile.has_market_stats:
-                stats_block = f"""## 市场概况
+                base = f"""## 市场概况
 - 上涨: {overview.up_count} 家 | 下跌: {overview.down_count} 家 | 平盘: {overview.flat_count} 家
 - 涨停: {overview.limit_up_count} 家 | 跌停: {overview.limit_down_count} 家
 - 两市成交额: {overview.total_amount:.0f} 亿元"""
+                if overview.tushare_limit_trade_date:
+                    b = overview.blown_limit_count
+                    mx = overview.limit_ladder_max_streak
+                    ge3 = overview.limit_ladder_ge3_count
+                    td = overview.tushare_limit_trade_date
+                    top = overview.limit_step_top or []
+                    tops = "，".join(
+                        f"{r.get('name') or r.get('ts_code')}（{r.get('nums')}板）"
+                        for r in top[:5]
+                    )
+                    base += (
+                        f"\n- Tushare 涨跌停快照（`trade_date={td}`）：炸板 {b if b is not None else 'N/A'} 家；"
+                        f"连板天梯最高 {mx if mx is not None else 'N/A'} 板；≥3 连板 {ge3 if ge3 is not None else 'N/A'} 家"
+                        + (f"；高度领先：{tops}" if tops else "")
+                        + "（盘后口径第三方数据，决策前请交叉验证。）"
+                    )
+                stats_block = base
             else:
                 stats_block = "## 市场概况\n（该市场暂无涨跌家数等统计）"
 
@@ -1116,6 +1326,15 @@ Output the report content directly, no extra commentary.
 | Limit-down | {overview.limit_down_count} |
 | Turnover ({self._get_turnover_unit_label()}) | {overview.total_amount:.0f} |
 """
+                if self.region == "cn" and overview.tushare_limit_trade_date:
+                    b = overview.blown_limit_count
+                    mx = overview.limit_ladder_max_streak
+                    ge3 = overview.limit_ladder_ge3_count
+                    stats_section = stats_section.rstrip() + f"""
+| Blown boards — Tushare `limit_list_d` Z | {b if b is not None else 'N/A'} |
+| Limit ladder max — Tushare `limit_step` | {mx if mx is not None else 'N/A'} |
+| Ladder tickers with ≥3 boards | {ge3 if ge3 is not None else 'N/A'} |
+"""
             sector_section = ""
             if self.profile.has_sector_rankings and (top_text or bottom_text):
                 sector_section = f"""
@@ -1125,6 +1344,9 @@ Output the report content directly, no extra commentary.
 """
             market_names = {"us": "US Market Recap", "hk": "HK Market Recap"}
             market_name = market_names.get(self.region, "A-share Market Recap")
+            extra_sent = ""
+            if self.region == "cn":
+                extra_sent = "\n" + self._funds_sentiment_section_en(overview).strip() + "\n"
             report = f"""## {overview.date} {market_name}
 
 ### 1. Market Summary
@@ -1133,7 +1355,7 @@ Today's {self._get_market_scope_name(template_language)} showed **{market_mood}*
 ### 2. Major Indices
 {indices_text or "- No index data available"}
 {stats_section}
-{sector_section}
+{sector_section}{extra_sent}
 ### 5. Risk Alerts
 Market conditions can change quickly. The data above is for reference only and does not constitute investment advice.
 
@@ -1163,7 +1385,7 @@ Market conditions can change quickly. The data above is for reference only and d
 {sector_block or "- 暂无板块涨跌榜数据。"}
 
 ### 四、资金与情绪
-- 结合成交额和涨跌家数看，当前更适合等待确认，避免仅凭单一热点追高。
+{self._funds_sentiment_section_zh(overview)}
 
 ### 五、消息催化
 - 暂无可用新闻时，应降低对题材持续性的确定性判断。
@@ -1198,9 +1420,24 @@ Market conditions can change quickly. The data above is for reference only and d
         
         # 3. 生成复盘报告
         report = self.generate_market_review(overview, news)
-        
+
+        # 4. A 股：追加市场交易闸门（确定性规则，非买卖建议）
+        if self.region == "cn":
+            try:
+                from src.my_research.market_gate_adapter import build_market_gate_section_for_review
+
+                gate_md = build_market_gate_section_for_review(
+                    overview,
+                    self.profile.mood_index_code,
+                    self._get_review_language(),
+                )
+                if gate_md:
+                    report = report.rstrip() + "\n\n" + gate_md
+            except Exception as e:
+                logger.warning("[大盘] 市场交易闸门段落追加失败: %s", e)
+
         logger.info("========== 大盘复盘分析完成 ==========")
-        
+
         return report
 
 

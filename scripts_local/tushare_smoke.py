@@ -197,6 +197,8 @@ def main() -> int:
                 ("moneyflow_cnt_ths", lambda: client.get_moneyflow_cnt_ths(trade_date=anchor)),
                 ("moneyflow_ths", lambda: client.get_moneyflow_ths(trade_date=anchor)),
                 ("limit_list_d", lambda: client.get_limit_list(trade_date=anchor, limit_type="U")),
+                ("limit_list_d_Z", lambda: client.get_limit_list(trade_date=anchor, limit_type="Z")),
+                ("limit_step", lambda: client.get_limit_step(trade_date=anchor)),
                 ("limit_list_ths", lambda: client.get_limit_list_ths(trade_date=anchor, limit_type="涨停池")),
                 ("limit_cpt_list", lambda: client.get_limit_cpt_list(trade_date=anchor)),
                 ("stk_limit", lambda: client.get_stk_limit(trade_date=anchor)),

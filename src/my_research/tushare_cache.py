@@ -43,6 +43,7 @@ DATASET_REQUIRED_FIELDS: Dict[str, Tuple[str, ...]] = {
     "top_inst": ("trade_date", "ts_code", "exalter"),
     "stk_limit": ("trade_date", "ts_code"),
     "limit_list_d": ("trade_date", "ts_code"),
+    "limit_step": ("trade_date", "ts_code"),
     "limit_list_ths": ("ts_code", "trade_date"),
     "limit_cpt_list": ("ts_code", "trade_date"),
     "moneyflow_ind_ths": ("trade_date", "ts_code"),

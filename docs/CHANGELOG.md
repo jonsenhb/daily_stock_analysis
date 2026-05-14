@@ -11,7 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
-- [文档] 新增 `docs/my_research/DGX_RESEARCH_TOOLING_DELIVERY.md`：DGX 投研工具链（Ollama 验证脚本、Tushare 接口矩阵/缓存/Client/手动烟测）任务总结与验收记录。
+- [修复] 恢复 `MarketAnalyzer.build_market_light_snapshot`（`_build_stats_block` 依赖；此前缺失导致大盘复盘在注入/模板路径上报错中断）。
+- [新功能] A 股大盘复盘文末追加 **市场交易闸门**：`src/my_research/market_gate_adapter.py`（`MarketOverview`→`MarketGateInput`、连板映射 `concept_strength`、中英文标题 `### 市场交易闸门` / `### Market Trading Gate`）；`MarketAnalyzer.run_daily_review` 惰性接入；配套 `tests/my_research/test_market_gate_adapter.py`。
+- [新功能] A 股大盘复盘：在配置 `TUSHARE_TOKEN` 时补充 Tushare `limit_list_d`（炸板 `Z`）与 `limit_step`（连板天梯）快照，写入 `MarketOverview` 并进入模板/统计区/LLM 提示中的市场概况；新增 `src/my_research/cn_limit_sentiment.py`、`TushareResearchClient.get_limit_step`；`scripts_local/tushare_smoke.py` 的 `--extended` 增加 `limit_list_d_Z` 与 `limit_step` 烟测。
+- [新功能] 新增 `src/my_research/market_gate.py`：Market Gate v1 确定性规则（`MarketGateInput`/`MarketGateResult`、无 LLM/Tushare）；配套 `tests/my_research/test_market_gate.py`。
 - [新功能] 新增 `scripts_local/tushare_smoke.py`：手动 Tushare 小样本烟测（读环境变量 `TUSHARE_TOKEN`、不写 `data/`）；说明见 `docs/my_research/tushare_smoke.md`。
 - [修复] `scripts_local/tushare_smoke.py`：`--date` 作为 `--trade-date` 别名，兼容手动验收命令。
 - [文档] 新增 `docs/my_research/tushare_smoke.md`：烟测用法、`--extended`、锚定交易日与退出码。

@@ -23,7 +23,7 @@
 ## 行为说明
 
 - **默认**：仅请求小样本的「基础」接口：`trade_cal`、`stock_basic`、`daily`、`daily_basic`、`index_daily`。
-- **`--extended`**：额外请求 `top_list`、`top_inst`、`moneyflow_*`、`limit_list_d` / `limit_list_ths`、`limit_cpt_list`、`stk_limit`、`suspend_d`（权限/积分以账号为准）。
+- **`--extended`**：额外请求 `top_list`、`top_inst`、`moneyflow_*`、`limit_list_d`（含涨停 `U` 与炸板 `Z`）、`limit_step`（连板天梯）、`limit_list_ths`、`limit_cpt_list`、`stk_limit`、`suspend_d`（权限/积分以账号为准）。
 - **锚定交易日**：用于单日类接口；默认取「上海时区下最近一个工作日（周一至周五）」，也可：
   - `export TUSHARE_SMOKE_TRADE_DATE=20240510`，或
   - `python scripts_local/tushare_smoke.py --date 20240510`（与 **`--trade-date`** 等价）
