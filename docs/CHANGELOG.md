@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+- [新功能] 新增 `src/my_research/seat_profile.py`：由 `lhb_event_study` 事件级结果按 `seat_name` 汇总画像（均值/胜率/伪回撤/近期表现/一日游嫌疑/可选 sector 偏好/置信度）；配套 `tests/my_research/test_seat_profile.py`。
+- [新功能] 新增 `src/my_research/lhb_event_study.py`：龙虎榜席位事件远期收益与 optional 超额（sector `benchmark_close` 优先，其次 `market_gate_df` 的 `index_close`）；锚点为 close[T]，forward 为 T+1/T+3/T+5 交易日；配套 `tests/my_research/test_lhb_event_study.py`（Mock，无 Tushare）。
+- [文档] 新增 `docs/my_research/candidate_scanner_plan.md`：Candidate Scanner v1（观察池）输入数据、输出字段、过滤/排序、风险标签、与 `market_gate`/LLM 关系及测试方案；不含代码实现。
+- [文档] 新增 `docs/my_research/lhb_seat_research_plan.md`：龙虎榜 `top_list`/`top_inst` 与席位画像研究计划（字段、权限、缓存、未来函数、D+1/D+3/D+5、事件研究、切片与风险）。
+- [新功能] 新增 `src/my_research/candidate_scanner.py`：Candidate Scanner v1（pandas DataFrame 输入、确定性过滤与打分、无 LLM/无真实 Tushare；`trade_allowed` 恒为 `False`，入池为 `watch_allowed`）；配套 `tests/my_research/test_candidate_scanner.py`。
 - [修复] 恢复 `MarketAnalyzer.build_market_light_snapshot`（`_build_stats_block` 依赖；此前缺失导致大盘复盘在注入/模板路径上报错中断）。
 - [新功能] A 股大盘复盘文末追加 **市场交易闸门**：`src/my_research/market_gate_adapter.py`（`MarketOverview`→`MarketGateInput`、连板映射 `concept_strength`、中英文标题 `### 市场交易闸门` / `### Market Trading Gate`）；`MarketAnalyzer.run_daily_review` 惰性接入；配套 `tests/my_research/test_market_gate_adapter.py`。
 - [新功能] A 股大盘复盘：在配置 `TUSHARE_TOKEN` 时补充 Tushare `limit_list_d`（炸板 `Z`）与 `limit_step`（连板天梯）快照，写入 `MarketOverview` 并进入模板/统计区/LLM 提示中的市场概况；新增 `src/my_research/cn_limit_sentiment.py`、`TushareResearchClient.get_limit_step`；`scripts_local/tushare_smoke.py` 的 `--extended` 增加 `limit_list_d_Z` 与 `limit_step` 烟测。
