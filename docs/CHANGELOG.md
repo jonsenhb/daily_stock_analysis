@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+- [新功能] 新增 `src/my_agents/eval_prompts.py`：本地 LLM 评测提示模板与 `score_eval_response` 启发式指标（JSON/合规/证据/不确定性）；配套 `tests/my_agents/test_eval_prompts.py`，规格见 `docs/my_research/llm_eval_plan.md`。
+- [文档] 新增 `docs/my_research/llm_eval_plan.md`：eval_schema_v1、评测任务与指标、本机 Ollama 使用说明（不改仓库 `.env`）。
+- [新功能] 新增 `src/my_agents/json_output.py`：LLM 文本提取 JSON（Markdown 围栏）、`parse_llm_json_object` 与必填键校验（缺失则 `success=False`）、可选 `validate_value_types`；配套 `tests/my_agents/test_json_output.py`（无 LLM）。
+- [新功能] 新增 `src/my_research/sentiment_reflexivity.py`：舆情/价格/板块热度特征 → 过热与价格确认得分及 `overheat_risk`（确定性规则，无 LLM/无新闻抓取）；配套 `tests/my_research/test_sentiment_reflexivity.py`。
 - [新功能] 新增 `src/my_agents/trade_journal_agent.py`：交易纪律复盘 prompt + `LLMToolAdapter.call_text` 封装，JSON 输出解析（`TradeJournalReviewResult`）；可注入 `llm_call` 测试；默认摘录至多 20 条；配套 `tests/my_agents/test_trade_journal_agent.py`。
 - [新功能] 新增 `src/my_research/trade_journal.py`：`TradeRecord`/`TradeJournalSummary`、CSV 读写、DataFrame 汇总（纪律分与风险标签为确定性规则）；`amount` 为成交数量；配套 `tests/my_research/test_trade_journal.py`（tmp_path，不读 data）。
 - [新功能] 新增 `src/my_research/seat_profile.py`：由 `lhb_event_study` 事件级结果按 `seat_name` 汇总画像（均值/胜率/伪回撤/近期表现/一日游嫌疑/可选 sector 偏好/置信度）；配套 `tests/my_research/test_seat_profile.py`。
