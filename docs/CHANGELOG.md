@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+- [文档] 新增 `docs/my_research/DGX_RESEARCH_TOOLING_DELIVERY.md`：DGX 投研工具链（Ollama 验证脚本、Tushare 接口矩阵/缓存/Client/手动烟测）任务总结与验收记录。
+- [新功能] 新增 `scripts_local/tushare_smoke.py`：手动 Tushare 小样本烟测（读环境变量 `TUSHARE_TOKEN`、不写 `data/`）；说明见 `docs/my_research/tushare_smoke.md`。
+- [修复] `scripts_local/tushare_smoke.py`：`--date` 作为 `--trade-date` 别名，兼容手动验收命令。
+- [文档] 新增 `docs/my_research/tushare_smoke.md`：烟测用法、`--extended`、锚定交易日与退出码。
+- [新功能] 新增 `src/my_research/tushare_research_client.py`：研究用 Tushare 接口封装（`query` 协议 + 可选 token 构造、`get_limit_list`→`limit_list_d`），日志记录 api/params/行数且脱敏 token；配套 `tests/my_research/test_tushare_research_client.py`（全 Mock，无真实 API）。
+- [新功能] 新增 `src/my_research/tushare_cache.py`：Tushare 研究数据 Parquet + manifest SQLite 冷缓存（可注入 fetch_fn/限流，不读 `.env`）；配套 `tests/my_research/test_tushare_cache.py` 与 `docs/my_research/tushare_cache.md`。
+- [chore] `requirements.txt` 增加 `pyarrow` 供研究缓存 Parquet 读写。
+- [文档] 新增 `docs/my_research/tushare_data_plan.md`：基于 Tushare 官网各接口说明整理积分/限量/更新时点、推荐字段、本地缓存策略及与市场闸门/龙虎榜/扫描/回测模块的用途映射（不替代官网正文）。
+- [改进] `scripts_local/agent_quick_test.sh` 与 `agent_smoke_test.sh` 改为通过 `scripts_local/_ollama_probe.sh` 探测本地 Ollama（`/api/tags` + 最小 `/api/generate`），不再调用面向 Gemini 的 `scripts/check_env.py --llm`；探测过程使用 stdlib，不加载项目 `.env`。
 - [修复] 未配置 Tushare / Longbridge 凭据时不再实例化对应可选 fetcher，避免缺失凭据的数据源进入候选集。
 - [修复] Longbridge 遇到连接关闭类异常后会进入冷却期，并在美股/港股实时与日线请求中临时跳过该数据源，避免请求级频繁重连。
 - [修复] Pytdx 股票名称查询在全部服务器不可达时会短暂冷却，并在冷却期内跳过重复探测，减少无效拨号与告警噪音。
